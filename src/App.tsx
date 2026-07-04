@@ -23,6 +23,9 @@ import {
 import { fallbackSite } from './fallback';
 import type { Album, BlogPost, Category, FaqItem, Photo, PricingPlan, Service, SiteData, Testimonial } from './types';
 import { SmartImage } from './components/SmartImage';
+import { InteractiveCard } from './components/InteractiveCard';
+import { HeroScene } from './components/HeroScene';
+import { CinematicLoader } from './components/Loader';
 import { uniqueBy, takeUnique } from './media';
 import { ApertureIcon, CameraIcon, FilmIcon, ImageIcon, LayersIcon, SearchIcon, SparklesIcon } from './icons';
 import { useStudioStore } from './store';
@@ -52,6 +55,37 @@ const pageTransition = {
   exit: { opacity: 0, y: -18 },
   transition: { duration: 0.45, ease: 'easeOut' },
 };
+
+function TooltipNavLink({ path, label, Icon }: { path: string, label: string, Icon: any }) {
+  const [hovered, setHovered] = useState(false);
+  
+  return (
+    <div 
+      className="relative flex items-center justify-center"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <NavLink to={path} className={({ isActive }) => (isActive ? 'nav-link active p-2' : 'nav-link p-2')}>
+        <Icon size={20} strokeWidth={1.5} />
+        <span className="sr-only">{label}</span>
+      </NavLink>
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 backdrop-blur-md text-white text-xs rounded uppercase tracking-widest whitespace-nowrap z-50 pointer-events-none border border-white/10"
+          >
+            {label}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 
 function useSiteData() {
   return useQuery({
@@ -163,6 +197,8 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activePhoto, setActivePhoto] = useState<Photo | null>(null);
   const [activeAlbum, setActiveAlbum] = useState<Album | null>(null);
+  const [loadingComplete, setLoadingComplete] = useState(false);
+
   const seoQuery = useQuery({
     queryKey: ['seo', location.pathname],
     queryFn: () => fetchSeo(location.pathname),
@@ -204,6 +240,22 @@ function App() {
       document.head.appendChild(twitterCard);
     }
     twitterCard.setAttribute('content', seo.twitterCard);
+
+    let scriptLd = document.querySelector('script[type="application/ld+json"]') as HTMLScriptElement | null;
+    if (!scriptLd) {
+      scriptLd = document.createElement('script');
+      scriptLd.setAttribute('type', 'application/ld+json');
+      document.head.appendChild(scriptLd);
+    }
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "PhotographyBusiness",
+      "name": seo.title,
+      "description": seo.description,
+      "image": seo.openGraphImage,
+      "url": seo.canonical,
+    };
+    scriptLd.textContent = JSON.stringify(jsonLd);
   }, [seoQuery.data]);
 
   useEffect(() => {
@@ -243,6 +295,8 @@ function App() {
 
   return (
     <div className="app-shell">
+      {!loadingComplete && <CinematicLoader onComplete={() => setLoadingComplete(true)} />}
+      
       <div className="background-orb background-orb-one" />
       <div className="background-orb background-orb-two" />
       <header className="topbar">
@@ -251,11 +305,9 @@ function App() {
             <span className="brand-mark-core" />
           </span>
         </Link>
-        <nav className="nav nav-desktop" aria-label="Primary">
-{routeItems.map(({ path, label }) => (
-            <NavLink key={path} to={path} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
-              {label}
-            </NavLink>
+        <nav className="nav nav-desktop flex items-center gap-4" aria-label="Primary">
+          {routeItems.filter(item => item.desktop).map(({ path, label, icon: Icon }) => (
+            <TooltipNavLink key={path} path={path} label={label} Icon={Icon} />
           ))}
         </nav>
         <div className="header-actions">
@@ -377,9 +429,8 @@ function Hero({ site }: { site: SiteData }) {
         </div>
       </div>
       <div className="hero-visual" data-animate>
-        <div className="hero-visual-frame">
-          <div className="hero-orb hero-orb-primary" />
-          <div className="hero-orb hero-orb-secondary" />
+        <div className="hero-visual-frame bg-gray-900/40 border border-white/10 shadow-2xl relative">
+          <HeroScene />
           <div className="hero-grid-lines" />
           <div className="hero-capsule hero-capsule-top">
             <span>Studio motion</span>
@@ -390,7 +441,7 @@ function Hero({ site }: { site: SiteData }) {
             <strong>Light first</strong>
           </div>
           <div className="hero-glass-card">
-            <img src={site.hero.image} alt="Cinematic studio preview" />
+            <SmartImage src={site.hero.image} alt="Cinematic studio preview" ratio="4/5" />
           </div>
         </div>
       </div>
@@ -423,11 +474,11 @@ function HomePage({ site, onOpenAlbum }: { site: SiteData; onOpenAlbum: (album: 
       <CardGrid
         items={site.categories}
         renderItem={(category) => (
-          <article key={category.slug} className="card">
+          <InteractiveCard className="card">
             <span className="card-kicker">{category.slug}</span>
             <h3>{category.name}</h3>
             <p>{category.description}</p>
-          </article>
+          </InteractiveCard>
         )}
       />
       <SectionTitle eyebrow="Albums" title="Story-driven sets with a strong visual identity." description="Albums act like curated chapters instead of static folders." />
@@ -445,11 +496,11 @@ function HomePage({ site, onOpenAlbum }: { site: SiteData; onOpenAlbum: (album: 
       <CardGrid
         items={processSteps}
         renderItem={(step) => (
-          <article className="card">
+          <InteractiveCard className="card">
             <span className="card-kicker">Process</span>
             <h3>{step.title}</h3>
             <p>{step.body}</p>
-          </article>
+          </InteractiveCard>
         )}
       />
       <SectionTitle eyebrow="Latest thinking" title="Editorial notes from the studio." description="Blogs are fed from the same content source as the rest of the platform." />
@@ -545,14 +596,14 @@ function CategoriesPage({ site }: { site: SiteData }) {
       <CardGrid
         items={site.categories}
         renderItem={(category) => (
-          <article key={category.slug} className="card category-card">
+          <InteractiveCard key={category.slug} className="card category-card">
             <span className="card-kicker">{category.slug}</span>
             <h3>{category.name}</h3>
             <p>{category.description}</p>
             <Link className="text-link" to={`/portfolio?category=${encodeURIComponent(category.name)}`}>
               View collection
             </Link>
-          </article>
+          </InteractiveCard>
         )}
       />
     </PageFrame>
@@ -629,11 +680,11 @@ function AchievementsPage({ site }: { site: SiteData }) {
       <CardGrid
         items={site.awards}
         renderItem={(award) => (
-          <article key={award.name} className="card">
+          <InteractiveCard key={award.name} className="card">
             <span className="card-kicker">{award.year}</span>
             <h3>{award.name}</h3>
             <p>{award.issuer}</p>
-          </article>
+          </InteractiveCard>
         )}
       />
     </PageFrame>
@@ -646,11 +697,11 @@ function AwardsPage({ site }: { site: SiteData }) {
       <CardGrid
         items={site.awards}
         renderItem={(award) => (
-          <article key={award.name} className="card">
+          <InteractiveCard key={award.name} className="card">
             <span className="card-kicker">{award.issuer}</span>
             <h3>{award.name}</h3>
             <p>{award.year}</p>
-          </article>
+          </InteractiveCard>
         )}
       />
     </PageFrame>
@@ -1034,9 +1085,10 @@ function CollectionStrip({ items }: { items: Photo[] }) {
 
 function PhotoCard({ photo, compact = false, onOpen }: { photo: Photo; compact?: boolean; onOpen?: () => void }) {
   return (
-    <article className={compact ? 'media-card compact' : 'media-card gallery-card'}>
-      <img src={photo.image} alt={photo.title} />
-      <div className="media-content">
+    <InteractiveCard className={compact ? 'media-card compact' : 'media-card gallery-card'}>
+      <div onClick={onOpen} className="h-full w-full">
+        <SmartImage src={photo.image} alt={photo.title} ratio="4/5" />
+        <div className="media-content relative z-20">
         <span className="card-kicker">{photo.category}</span>
         <h3>{photo.title}</h3>
         <p>{photo.location}</p>
@@ -1081,7 +1133,8 @@ function PhotoCard({ photo, compact = false, onOpen }: { photo: Photo; compact?:
           </button>
         )}
       </div>
-    </article>
+      </div>
+    </InteractiveCard>
   );
 }
 
@@ -1101,7 +1154,7 @@ function PhotoModal({ photo, onClose }: { photo: Photo; onClose: () => void }) {
           Close
         </button>
         <div className="modal-image">
-          <img src={photo.image} alt={photo.title} />
+          <SmartImage src={photo.image} alt={photo.title} ratio="4/5" />
         </div>
         <div className="modal-copy">
           <span className="card-kicker">{photo.category}</span>
@@ -1177,7 +1230,7 @@ function AlbumModal({
           Close
         </button>
         <div className="modal-image">
-          <img src={album.cover} alt={album.title} />
+          <SmartImage src={album.cover} alt={album.title} ratio="4/5" />
         </div>
         <div className="modal-copy">
           <span className="card-kicker">{album.year}</span>
@@ -1206,7 +1259,7 @@ function AlbumModal({
             <div className="album-related-grid">
               {relatedPhotos.map((photo) => (
                 <button key={photo.id} type="button" className="album-related-card" onClick={() => onOpenPhoto(photo)}>
-                  <img src={photo.image} alt={photo.title} />
+                  <SmartImage src={photo.image} alt={photo.title} ratio="4/5" />
                   <span>{photo.title}</span>
                 </button>
               ))}
@@ -1220,36 +1273,38 @@ function AlbumModal({
 
 function AlbumCard({ album, onOpen }: { album: Album; onOpen?: () => void }) {
   return (
-    <article className={onOpen ? 'card album-card album-clickable' : 'card album-card'}>
-      <img src={album.cover} alt={album.title} />
-      <span className="card-kicker">{album.year}</span>
-      <h3>{album.title}</h3>
-      <p>{album.description}</p>
-      <div className="metadata">
-        <span>{album.count} frames</span>
+    <InteractiveCard className="album-card card album-clickable">
+      <div onClick={onOpen} className="h-full w-full">
+        <SmartImage src={album.cover} alt={album.title} ratio="4/5" />
+        <span className="card-kicker">{album.year}</span>
+        <h3>{album.title}</h3>
+        <p>{album.description}</p>
+        <div className="metadata">
+          <span>{album.count} frames</span>
+        </div>
+        {onOpen && (
+          <button className="text-link gallery-open" type="button" onClick={onOpen}>
+            Open album
+          </button>
+        )}
       </div>
-      {onOpen && (
-        <button className="text-link gallery-open" type="button" onClick={onOpen}>
-          Open album
-        </button>
-      )}
-    </article>
+    </InteractiveCard>
   );
 }
 
 function ServiceCard({ service }: { service: Service }) {
   return (
-    <article className="card">
+    <InteractiveCard className="card">
       <span className="card-kicker">{service.price}</span>
       <h3>{service.title}</h3>
       <p>{service.description}</p>
-    </article>
+    </InteractiveCard>
   );
 }
 
 function PricingCard({ plan }: { plan: PricingPlan }) {
   return (
-    <article className={plan.highlight ? 'pricing-card highlight' : 'pricing-card'}>
+    <InteractiveCard className={plan.highlight ? 'pricing-card highlight' : 'pricing-card'}>
       <span className="card-kicker">{plan.highlight ? 'Most booked' : 'Plan'}</span>
       <h3>{plan.name}</h3>
       <strong>{plan.price}</strong>
@@ -1258,36 +1313,38 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
           <li key={benefit}>{benefit}</li>
         ))}
       </ul>
-    </article>
+    </InteractiveCard>
   );
 }
 
 function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
   return (
-    <article className="card testimonial-card">
-      <div className="testimonial-header">
-        <img src={testimonial.avatar} alt={testimonial.name} />
+    <InteractiveCard className="card testimonial-card">
+      <div className="testimonial-header relative z-20">
+        <SmartImage src={testimonial.avatar} alt={testimonial.name} ratio="1/1" />
         <div>
           <h3>{testimonial.name}</h3>
           <span>{testimonial.role}</span>
         </div>
       </div>
-      <p>"{testimonial.quote}"</p>
-    </article>
+      <p className="relative z-20 mt-4">"{testimonial.quote}"</p>
+    </InteractiveCard>
   );
 }
 
 function BlogCard({ post }: { post: BlogPost }) {
   return (
-    <article className="card blog-card">
-      <img src={post.image} alt={post.title} />
-      <span className="card-kicker">{post.category}</span>
-      <h3>{post.title}</h3>
-      <p>{post.excerpt}</p>
-      <div className="metadata">
-        <span>{post.date}</span>
+    <InteractiveCard className="card blog-card">
+      <SmartImage src={post.image} alt={post.title} ratio="16/9" />
+      <div className="relative z-20 mt-4">
+        <span className="card-kicker">{post.category}</span>
+        <h3>{post.title}</h3>
+        <p>{post.excerpt}</p>
+        <div className="blog-meta mt-2">
+          <span className="muted">{post.date}</span>
+        </div>
       </div>
-    </article>
+    </InteractiveCard>
   );
 }
 

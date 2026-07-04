@@ -1,0 +1,235 @@
+/* ── Cinematic Hero Animation ── */
+:root {
+  --ch-timing: cubic-bezier(0.16, 1, 0.3, 1);
+  --ch-gold: #d8b77b;
+  --ch-dark: #07080d;
+}
+
+.cinematic-hero {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ch-dark);
+  overflow: hidden;
+}
+
+/* ── Film Grain Overlay ── */
+.cinematic-hero::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 10;
+  animation: grain 0.5s steps(6) infinite;
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  30% { transform: translate(3%, -15%); }
+  50% { transform: translate(12%, 9%); }
+  70% { transform: translate(9%, 4%); }
+  90% { transform: translate(-1%, 7%); }
+}
+
+/* ── Camera Container ── */
+.camera-container {
+  position: relative;
+  width: 340px;
+  height: 240px;
+  z-index: 5;
+  will-change: transform, opacity;
+}
+
+@media (max-width: 640px) {
+  .camera-container {
+    width: 260px;
+    height: 184px;
+  }
+}
+
+.camera-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 40px rgba(216, 183, 123, 0.15));
+}
+
+/* ── Aperture Blades Container ── */
+.aperture-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  z-index: 6;
+}
+
+.aperture-blade {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 60px;
+  background: var(--ch-dark);
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  transform-origin: center center;
+  will-change: transform;
+}
+
+/* ── Flash ── */
+.shutter-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  z-index: 15;
+  pointer-events: none;
+  will-change: opacity;
+}
+
+/* ── Revealed Image ── */
+.hero-revealed-image {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.hero-revealed-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  animation: kenBurns 20s ease-in-out infinite alternate;
+}
+
+@keyframes kenBurns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+
+/* ── Shutter Sound Line Effect ── */
+.shutter-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.shutter-lines::before,
+.shutter-lines::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--ch-gold), transparent);
+}
+
+.shutter-lines::before { top: 50%; transform: translateY(-40px); }
+.shutter-lines::after  { top: 50%; transform: translateY(40px); }
+
+/* ── Vignette on revealed image ── */
+.hero-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+  pointer-events: none;
+}
+
+/* ── Brand Watermark ── */
+.hero-brand-watermark {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  opacity: 0;
+  color: white;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  will-change: opacity, transform;
+}
+
+/* ── Viewfinder Corners ── */
+.viewfinder-corners {
+  position: absolute;
+  inset: 15%;
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewfinder-corners::before,
+.viewfinder-corners::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-color: var(--ch-gold);
+  border-style: solid;
+}
+
+.viewfinder-corners::before {
+  top: 0; left: 0;
+  border-width: 2px 0 0 2px;
+}
+
+.viewfinder-corners::after {
+  bottom: 0; right: 0;
+  border-width: 0 2px 2px 0;
+}
+
+.viewfinder-corners-alt {
+  position: absolute;
+  inset: 15%;
+  z-index: 8;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewfinder-corners-alt::before,
+.viewfinder-corners-alt::after {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-color: var(--ch-gold);
+  border-style: solid;
+}
+
+.viewfinder-corners-alt::before {
+  top: 0; right: 0;
+  border-width: 2px 2px 0 0;
+}
+
+.viewfinder-corners-alt::after {
+  bottom: 0; left: 0;
+  border-width: 0 0 2px 2px;
+}
+
+/* ── Counter Display ── */
+.shutter-counter {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  z-index: 20;
+  opacity: 0;
+  color: var(--ch-gold);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}

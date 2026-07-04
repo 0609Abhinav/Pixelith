@@ -8,6 +8,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from .data import SITE_DATA
+from .db import bookings_col, contacts_col
 
 SECRET_KEY = "change-me-in-production"
 ALGORITHM = "HS256"
@@ -25,8 +26,10 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-BOOKINGS: List[Dict[str, Any]] = []
-CONTACTS: List[Dict[str, Any]] = []
+# In-memory fallback lists (used when MongoDB is unavailable)
+_BOOKINGS_FALLBACK: List[Dict[str, Any]] = []
+_CONTACTS_FALLBACK: List[Dict[str, Any]] = []
+
 ADMIN_USER = {
     "email": "admin@darkvampire.studio",
     "password": "admin123",
@@ -70,10 +73,20 @@ def verify_token(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Invalid authentication token") from exc
 
 
+def _strip_id(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove MongoDB _id so it can be JSON-serialised."""
+    doc.pop("_id", None)
+    return doc
+
+
+# ── health ─────────────────────────────────────────────────────────────────
+
 @app.get("/api/health")
 def health() -> Dict[str, str]:
-    return {"status": "ok", "service": "lumen-atelier-api"}
+    return {"status": "ok", "service": "darkvampire-api"}
 
+
+# ── site data ───────────────────────────────────────────────────────────────
 
 @app.get("/api/site")
 def site() -> Dict[str, Any]:
@@ -110,20 +123,23 @@ def seo(path: str = "/") -> Dict[str, Any]:
 
 
 @app.get("/api/photos")
-def photos(category: Optional[str] = None, album: Optional[str] = None, search: Optional[str] = None) -> Dict[str, Any]:
+def photos(
+    category: Optional[str] = None,
+    album: Optional[str] = None,
+    search: Optional[str] = None,
+) -> Dict[str, Any]:
     items = SITE_DATA["photos"]
     if category:
-        items = [item for item in items if item["category"].lower() == category.lower()]
+        items = [i for i in items if i["category"].lower() == category.lower()]
     if album:
-        items = [item for item in items if item["album"].lower() == album.lower()]
+        items = [i for i in items if i["album"].lower() == album.lower()]
     if search:
-        query = search.lower()
+        q = search.lower()
         items = [
-            item
-            for item in items
-            if query in item["title"].lower()
-            or query in item["category"].lower()
-            or query in " ".join(item["tags"]).lower()
+            i for i in items
+            if q in i["title"].lower()
+            or q in i["category"].lower()
+            or q in " ".join(i["tags"]).lower()
         ]
     return {"items": items}
 
@@ -150,57 +166,127 @@ def search(q: str) -> Dict[str, Any]:
         return {"photos": [], "albums": [], "blogs": []}
     return {
         "photos": [
-            item for item in SITE_DATA["photos"]
-            if query in item["title"].lower() or query in item["category"].lower() or query in item["album"].lower()
+            i for i in SITE_DATA["photos"]
+            if query in i["title"].lower()
+            or query in i["category"].lower()
+            or query in i["album"].lower()
         ],
-        "albums": [item for item in SITE_DATA["albums"] if query in item["title"].lower()],
-        "blogs": [item for item in SITE_DATA["blogs"] if query in item["title"].lower() or query in item["category"].lower()],
+        "albums": [i for i in SITE_DATA["albums"] if query in i["title"].lower()],
+        "blogs": [
+            i for i in SITE_DATA["blogs"]
+            if query in i["title"].lower() or query in i["category"].lower()
+        ],
     }
 
 
+# ── bookings ────────────────────────────────────────────────────────────────
+
 @app.post("/api/bookings")
-def create_booking(payload: BookingRequest) -> Dict[str, Any]:
+async def create_booking(payload: BookingRequest) -> Dict[str, Any]:
     record = payload.dict()
     record["status"] = "pending"
     record["createdAt"] = datetime.utcnow().isoformat() + "Z"
-    BOOKINGS.append(record)
+
+    col = bookings_col()
+    if col is not None:
+        try:
+            result = await col.insert_one(dict(record))
+            record["insertedId"] = str(result.inserted_id)
+        except Exception as exc:
+            # Log and fall back to in-memory
+            import logging
+            logging.getLogger(__name__).warning("MongoDB insert failed: %s", exc)
+            _BOOKINGS_FALLBACK.append(record)
+    else:
+        _BOOKINGS_FALLBACK.append(record)
+
     return {"ok": True, "booking": record}
 
 
+# ── contacts ────────────────────────────────────────────────────────────────
+
 @app.post("/api/contact")
-def create_contact(payload: ContactRequest) -> Dict[str, Any]:
+async def create_contact(payload: ContactRequest) -> Dict[str, Any]:
     record = payload.dict()
     record["createdAt"] = datetime.utcnow().isoformat() + "Z"
-    CONTACTS.append(record)
+
+    col = contacts_col()
+    if col is not None:
+        try:
+            result = await col.insert_one(dict(record))
+            record["insertedId"] = str(result.inserted_id)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("MongoDB insert failed: %s", exc)
+            _CONTACTS_FALLBACK.append(record)
+    else:
+        _CONTACTS_FALLBACK.append(record)
+
     return {"ok": True, "message": "Message received", "contact": record}
 
+
+# ── auth ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login")
 def login(payload: LoginRequest) -> Dict[str, Any]:
     if payload.email != ADMIN_USER["email"] or payload.password != ADMIN_USER["password"]:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token({"sub": ADMIN_USER["email"], "role": ADMIN_USER["role"], "name": ADMIN_USER["name"]})
+    token = create_access_token(
+        {"sub": ADMIN_USER["email"], "role": ADMIN_USER["role"], "name": ADMIN_USER["name"]}
+    )
     return {"accessToken": token, "user": {k: ADMIN_USER[k] for k in ("email", "name", "role")}}
 
 
+# ── admin summary ────────────────────────────────────────────────────────────
+
 @app.get("/api/admin/summary")
-def admin_summary(token: str = "") -> Dict[str, Any]:
+async def admin_summary(token: str = "") -> Dict[str, Any]:
     if not token:
         raise HTTPException(status_code=401, detail="Missing token")
     verify_token(token)
+
+    col_b = bookings_col()
+    col_c = contacts_col()
+
+    if col_b is not None:
+        try:
+            booking_count = await col_b.count_documents({})
+            recent_bookings_raw = await col_b.find().sort("createdAt", -1).limit(5).to_list(5)
+            recent_bookings = [_strip_id(d) for d in recent_bookings_raw]
+        except Exception:
+            booking_count = len(_BOOKINGS_FALLBACK)
+            recent_bookings = _BOOKINGS_FALLBACK[-5:]
+    else:
+        booking_count = len(_BOOKINGS_FALLBACK)
+        recent_bookings = _BOOKINGS_FALLBACK[-5:]
+
+    if col_c is not None:
+        try:
+            contact_count = await col_c.count_documents({})
+            recent_contacts_raw = await col_c.find().sort("createdAt", -1).limit(5).to_list(5)
+            recent_contacts = [_strip_id(d) for d in recent_contacts_raw]
+        except Exception:
+            contact_count = len(_CONTACTS_FALLBACK)
+            recent_contacts = _CONTACTS_FALLBACK[-5:]
+    else:
+        contact_count = len(_CONTACTS_FALLBACK)
+        recent_contacts = _CONTACTS_FALLBACK[-5:]
+
     return {
         "counts": {
             "photos": len(SITE_DATA["photos"]),
             "albums": len(SITE_DATA["albums"]),
             "blogs": len(SITE_DATA["blogs"]),
-            "bookings": len(BOOKINGS),
-            "contacts": len(CONTACTS),
+            "bookings": booking_count,
+            "contacts": contact_count,
         },
-        "recentBookings": BOOKINGS[-5:],
-        "recentContacts": CONTACTS[-5:],
+        "recentBookings": recent_bookings,
+        "recentContacts": recent_contacts,
         "metrics": SITE_DATA["stats"],
     }
 
+
+# ── sitemaps / feeds ─────────────────────────────────────────────────────────
 
 @app.get("/sitemap.xml")
 def sitemap() -> Response:
@@ -221,9 +307,13 @@ def sitemap() -> Response:
         "https://darkvampire.studio/booking",
         "https://darkvampire.studio/contact",
     ]
-    body = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
+    body = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    today = datetime.utcnow().date().isoformat()
     for url in urls:
-        body.append(f"<url><loc>{url}</loc><lastmod>{datetime.utcnow().date().isoformat()}</lastmod></url>")
+        body.append(f"<url><loc>{url}</loc><lastmod>{today}</lastmod></url>")
     body.append("</urlset>")
     return Response(content="".join(body), media_type="application/xml")
 
@@ -239,10 +329,12 @@ def rss() -> Response:
     items = []
     for blog in SITE_DATA["blogs"]:
         items.append(
-            f"<item><title>{blog['title']}</title><description>{blog['excerpt']}</description><pubDate>{blog['date']}</pubDate></item>"
+            f"<item><title>{blog['title']}</title>"
+            f"<description>{blog['excerpt']}</description>"
+            f"<pubDate>{blog['date']}</pubDate></item>"
         )
     body = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        '<?xml version="1.0" encoding="UTF-8"?>'
         "<rss version=\"2.0\"><channel>"
         f"<title>{SITE_DATA['brand']['name']} Journal</title>"
         f"<description>{SITE_DATA['hero']['summary']}</description>"
