@@ -9,7 +9,6 @@ type SmartImageProps = {
   loading?: 'lazy' | 'eager';
   priority?: boolean;
   sizes?: string;
-  children?: never;
 };
 
 export function SmartImage({
@@ -28,20 +27,31 @@ export function SmartImage({
     registerImage(src);
   }, [src]);
 
-  let aspectClass = '';
-  if (ratio === '4 / 5' || ratio === '4/5') aspectClass = 'aspect-[4/5]';
-  else if (ratio === '16 / 9' || ratio === '16/9') aspectClass = 'aspect-video';
-  else if (ratio === '1 / 1' || ratio === '1/1') aspectClass = 'aspect-square';
-
   return (
     <div 
-      className={`smart-image relative overflow-hidden bg-gray-900/20 ${aspectClass} ${className}`.trim()} 
-      style={!aspectClass ? { aspectRatio: ratio } as CSSProperties : {}}
+      className={`smart-image ${className}`.trim()} 
+      style={{ aspectRatio: ratio, position: 'relative', overflow: 'hidden', background: 'rgba(20,22,30,0.3)' } as CSSProperties}
     >
-      {!loaded && <div className="absolute inset-0 bg-gray-800/40 animate-pulse backdrop-blur-md" aria-hidden="true" />}
+      {!loaded && (
+        <div 
+          style={{ 
+            position: 'absolute', inset: 0, 
+            background: 'rgba(30,32,44,0.4)', 
+            backdropFilter: 'blur(12px)',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} 
+          aria-hidden="true" 
+        />
+      )}
       <img
-        className="w-full h-full object-cover object-center transition-transform duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.05]"
-        style={{ opacity: loaded ? 1 : 0 }}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          opacity: loaded ? 1 : 0,
+          transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.4s ease',
+        }}
         src={failed ? 'https://images.unsplash.com/photo-1518831959646-742c3c57c0c8?auto=format&fit=crop&w=1200&q=80' : src}
         alt={alt}
         loading={priority ? 'eager' : loading}

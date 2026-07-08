@@ -1,8 +1,9 @@
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 export function InteractiveCard({ children, className = '' }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
@@ -15,12 +16,8 @@ export function InteractiveCard({ children, className = '' }: { children: ReactN
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const xPct = mouseX / width - 0.5;
-    const yPct = mouseY / height - 0.5;
+    const xPct = (e.clientX - rect.left) / rect.width - 0.5;
+    const yPct = (e.clientY - rect.top) / rect.height - 0.5;
     x.set(xPct);
     y.set(yPct);
   };
@@ -28,24 +25,40 @@ export function InteractiveCard({ children, className = '' }: { children: ReactN
   const handleMouseLeave = () => {
     x.set(0);
     y.set(0);
+    setHovered(false);
   };
 
   return (
     <motion.div
       ref={ref}
       onMouseMove={handleMouseMove}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={handleMouseLeave}
       style={{
         rotateX,
         rotateY,
         transformStyle: 'preserve-3d',
+        position: 'relative',
+        cursor: 'pointer',
+        perspective: 1000,
       }}
       whileHover={{ scale: 1.02 }}
       transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }}
-      className={`relative group cursor-pointer perspective-1000 ${className}`}
+      className={className}
     >
       {children}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-[400ms] pointer-events-none z-10" />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.4s ease',
+          pointerEvents: 'none',
+          zIndex: 10,
+          borderRadius: 'inherit',
+        }}
+      />
     </motion.div>
   );
 }

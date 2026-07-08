@@ -24,8 +24,10 @@ import { fallbackSite } from './fallback';
 import type { Album, BlogPost, Category, FaqItem, Photo, PricingPlan, Service, SiteData, Testimonial } from './types';
 import { SmartImage } from './components/SmartImage';
 import { InteractiveCard } from './components/InteractiveCard';
-import { HeroScene } from './components/HeroScene';
-import { CinematicLoader } from './components/Loader';
+import { CinematicHero } from './components/HeroScene';
+import { ScrollProgress } from './components/ScrollProgress';
+import { SmoothCursor } from './components/SmoothCursor';
+import { useScrollAnimations } from './hooks/useScrollAnimations';
 import { uniqueBy, takeUnique } from './media';
 import { ApertureIcon, CameraIcon, FilmIcon, ImageIcon, LayersIcon, SearchIcon, SparklesIcon } from './icons';
 import { useStudioStore } from './store';
@@ -61,11 +63,11 @@ function TooltipNavLink({ path, label, Icon }: { path: string, label: string, Ic
   
   return (
     <div 
-      className="relative flex items-center justify-center"
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <NavLink to={path} className={({ isActive }) => (isActive ? 'nav-link active p-2' : 'nav-link p-2')}>
+      <NavLink to={path} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} style={{ padding: '8px' }}>
         <Icon size={20} strokeWidth={1.5} />
         <span className="sr-only">{label}</span>
       </NavLink>
@@ -76,7 +78,25 @@ function TooltipNavLink({ path, label, Icon }: { path: string, label: string, Ic
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 5 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 backdrop-blur-md text-white text-xs rounded uppercase tracking-widest whitespace-nowrap z-50 pointer-events-none border border-white/10"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              marginTop: '8px',
+              padding: '4px 8px',
+              background: 'rgba(0,0,0,0.8)',
+              backdropFilter: 'blur(12px)',
+              color: '#fff',
+              fontSize: '10px',
+              borderRadius: '4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.15em',
+              whiteSpace: 'nowrap',
+              zIndex: 50,
+              pointerEvents: 'none',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}
           >
             {label}
           </motion.div>
@@ -198,6 +218,7 @@ function App() {
   const [activePhoto, setActivePhoto] = useState<Photo | null>(null);
   const [activeAlbum, setActiveAlbum] = useState<Album | null>(null);
   const [loadingComplete, setLoadingComplete] = useState(false);
+  const scrollRef = useScrollAnimations([location.pathname, loadingComplete]);
 
   const seoQuery = useQuery({
     queryKey: ['seo', location.pathname],
@@ -294,8 +315,15 @@ function App() {
   }, [location.pathname]);
 
   return (
-    <div className="app-shell">
-      {!loadingComplete && <CinematicLoader onComplete={() => setLoadingComplete(true)} />}
+    <div className="app-shell" ref={scrollRef}>
+      {!loadingComplete && (
+        <CinematicHero
+          heroImage={site.hero.image}
+          onComplete={() => setLoadingComplete(true)}
+        />
+      )}
+      <ScrollProgress />
+      <SmoothCursor />
       
       <div className="background-orb background-orb-one" />
       <div className="background-orb background-orb-two" />
@@ -406,20 +434,20 @@ function Hero({ site }: { site: SiteData }) {
   return (
     <section className="hero">
       <div className="hero-copy">
-        <span className="eyebrow" data-animate>
+        <span className="eyebrow" data-animate data-scroll>
           {site.hero.eyebrow}
         </span>
-        <h1 data-animate>{site.hero.headline}</h1>
-        <p data-animate>{site.hero.summary}</p>
-        <div className="hero-actions" data-animate>
-          <Link className="button button-primary" to={site.hero.primaryCta.href}>
+        <h1 data-animate data-scroll>{site.hero.headline}</h1>
+        <p data-animate data-scroll>{site.hero.summary}</p>
+        <div className="hero-actions" data-animate data-scroll>
+          <Link className="button button-primary" to={site.hero.primaryCta.href} data-magnetic>
             {site.hero.primaryCta.label}
           </Link>
-          <Link className="button button-secondary" to={site.hero.secondaryCta.href}>
+          <Link className="button button-secondary" to={site.hero.secondaryCta.href} data-magnetic>
             {site.hero.secondaryCta.label}
           </Link>
         </div>
-        <div className="stat-row">
+        <div className="stat-row" data-stagger>
           {site.stats.map((stat) => (
             <article key={stat.label} className="stat-card" data-animate>
               <strong>{stat.value}</strong>
@@ -428,9 +456,8 @@ function Hero({ site }: { site: SiteData }) {
           ))}
         </div>
       </div>
-      <div className="hero-visual" data-animate>
-        <div className="hero-visual-frame bg-gray-900/40 border border-white/10 shadow-2xl relative">
-          <HeroScene />
+      <div className="hero-visual" data-animate data-scale>
+        <div className="hero-visual-frame">
           <div className="hero-grid-lines" />
           <div className="hero-capsule hero-capsule-top">
             <span>Studio motion</span>
