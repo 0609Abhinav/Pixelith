@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import gsap from 'gsap';
 import {
   Link,
   NavLink,
@@ -21,7 +20,7 @@ import {
   submitContact,
 } from './api';
 import { fallbackSite } from './fallback';
-import type { Album, BlogPost, Category, FaqItem, Photo, PricingPlan, Service, SiteData, Testimonial } from './types';
+import type { Album, BlogPost, Category, FaqItem, Photo, PricingPlan, SearchResults, Service, SiteData, StatItem, Testimonial } from './types';
 import { SmartImage } from './components/SmartImage';
 import { InteractiveCard } from './components/InteractiveCard';
 import { CinematicHero } from './components/HeroScene';
@@ -294,19 +293,6 @@ function App() {
       script.remove();
     };
   }, [location.pathname, site]);
-
-  useEffect(() => {
-    const animation = gsap.from(document.querySelectorAll('[data-animate]'), {
-      opacity: 0,
-      y: 22,
-      duration: 0.8,
-      stagger: 0.08,
-      ease: 'power3.out',
-    });
-    return () => {
-      animation.kill();
-    };
-  }, [location.pathname]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -908,7 +894,8 @@ function SearchPage({ site }: { site: SiteData }) {
     queryFn: () => searchContent(query),
     enabled: query.trim().length > 0,
   });
-  const results = query.trim().length > 0 ? searchQuery.data : { photos: [], albums: [], blogs: [] };
+  const emptyResults: SearchResults = { photos: [], albums: [], blogs: [] };
+  const results: SearchResults = query.trim().length > 0 ? searchQuery.data ?? emptyResults : emptyResults;
 
   return (
     <PageFrame title="Search" description="Search across photos, albums, and blog posts in a single premium interface.">
@@ -1004,6 +991,7 @@ function DashboardPage({ site }: { site: SiteData }) {
   }
 
   const summary = summaryQuery.data;
+  const dashboardMetrics: StatItem[] = summary?.metrics ?? site.stats;
 
   return (
     <PageFrame title="Dashboard" description="A SaaS-like admin overview for content, inquiries, and studio operations.">
@@ -1013,7 +1001,7 @@ function DashboardPage({ site }: { site: SiteData }) {
         </button>
       </div>
       <div className="experience-grid">
-        {(summary?.metrics ?? site.stats).map((item) => (
+        {dashboardMetrics.map((item) => (
           <article key={item.label} className="experience-card">
             <span>{item.label}</span>
             <strong>{item.value}</strong>

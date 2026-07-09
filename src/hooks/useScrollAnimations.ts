@@ -13,33 +13,52 @@ export function useScrollAnimations(deps: any[] = []) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const root = containerRef.current;
+    if (!root) return;
 
     const ctx = gsap.context(() => {
-      // Fade-in + slide-up for all [data-scroll] elements
-      const scrollElements = containerRef.current!.querySelectorAll('[data-scroll]');
-      scrollElements.forEach((el) => {
-        gsap.fromTo(
+      const revealOnEnter = (
+        targets: Element | HTMLCollection | Element[],
+        fromVars: gsap.TweenVars,
+        toVars: gsap.TweenVars,
+        trigger: Element,
+        start = 'top 88%',
+        stagger = 0
+      ) => {
+        ScrollTrigger.create({
+          trigger,
+          start,
+          once: true,
+          onEnter: () => {
+            gsap.fromTo(targets, fromVars, {
+              ...toVars,
+              stagger,
+              clearProps: 'transform,opacity,visibility',
+            });
+          },
+        });
+      };
+
+      root.querySelectorAll('[data-animate]').forEach((el) => {
+        revealOnEnter(
           el,
-          { y: 60, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            duration: 1,
-            ease: 'power3.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 85%',
-              end: 'top 40%',
-              toggleActions: 'play none none reverse',
-            },
-          }
+          { y: 22, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 0.75, ease: 'power3.out' },
+          el
         );
       });
 
-      // Parallax for [data-parallax] elements
-      const parallaxElements = containerRef.current!.querySelectorAll('[data-parallax]');
-      parallaxElements.forEach((el) => {
+      root.querySelectorAll('[data-scroll]').forEach((el) => {
+        revealOnEnter(
+          el,
+          { y: 60, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 1, ease: 'power3.out' },
+          el,
+          'top 85%'
+        );
+      });
+
+      root.querySelectorAll('[data-parallax]').forEach((el) => {
         const speed = parseFloat(el.getAttribute('data-parallax') || '0.2');
         gsap.to(el, {
           yPercent: speed * 100,
@@ -53,106 +72,88 @@ export function useScrollAnimations(deps: any[] = []) {
         });
       });
 
-      // Scale-in for [data-scale] elements
-      const scaleElements = containerRef.current!.querySelectorAll('[data-scale]');
-      scaleElements.forEach((el) => {
-        gsap.fromTo(
+      root.querySelectorAll('[data-scale]').forEach((el) => {
+        revealOnEnter(
           el,
-          { scale: 0.85, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 1.2,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 85%',
-              toggleActions: 'play none none reverse',
-            },
-          }
+          { scale: 0.9, autoAlpha: 0 },
+          { scale: 1, autoAlpha: 1, duration: 1.1, ease: 'power2.out' },
+          el,
+          'top 85%'
         );
       });
 
-      // Horizontal reveal for [data-reveal] elements
-      const revealElements = containerRef.current!.querySelectorAll('[data-reveal]');
-      revealElements.forEach((el) => {
+      root.querySelectorAll('[data-reveal]').forEach((el) => {
         const direction = el.getAttribute('data-reveal') || 'left';
         const xFrom = direction === 'left' ? -80 : 80;
-        gsap.fromTo(
+        revealOnEnter(
           el,
-          { x: xFrom, opacity: 0 },
-          {
-            x: 0,
-            opacity: 1,
-            duration: 1,
-            ease: 'power3.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 80%',
-              toggleActions: 'play none none reverse',
-            },
-          }
+          { x: xFrom, autoAlpha: 0 },
+          { x: 0, autoAlpha: 1, duration: 1, ease: 'power3.out' },
+          el,
+          'top 80%'
         );
       });
 
-      // Stagger children for [data-stagger] containers
-      const staggerContainers = containerRef.current!.querySelectorAll('[data-stagger]');
-      staggerContainers.forEach((container) => {
-        const children = container.children;
-        gsap.fromTo(
-          children,
-          { y: 40, opacity: 0 },
-          {
-            y: 0,
-            opacity: 1,
-            duration: 0.8,
-            stagger: 0.12,
-            ease: 'power3.out',
-            scrollTrigger: {
-              trigger: container,
-              start: 'top 80%',
-              toggleActions: 'play none none reverse',
-            },
-          }
+      root.querySelectorAll('[data-stagger]').forEach((container) => {
+        revealOnEnter(
+          Array.from(container.children),
+          { y: 40, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 0.8, ease: 'power3.out' },
+          container,
+          'top 82%',
+          0.12
         );
       });
 
-      // Text split animation for [data-text-reveal] elements
-      const textElements = containerRef.current!.querySelectorAll('[data-text-reveal]');
-      textElements.forEach((el) => {
+      root.querySelectorAll('[data-text-reveal]').forEach((el) => {
+        if (el.querySelector('[data-text-word]')) return;
+
         const text = el.textContent || '';
         const words = text.split(' ');
         el.textContent = '';
         const wrapper = document.createElement('span');
         wrapper.style.display = 'inline';
-        
+
         words.forEach((word, i) => {
           const span = document.createElement('span');
+          span.dataset.textWord = 'true';
           span.textContent = word + (i < words.length - 1 ? ' ' : '');
           span.style.display = 'inline-block';
-          span.style.opacity = '0';
-          span.style.transform = 'translateY(20px)';
           wrapper.appendChild(span);
         });
         el.appendChild(wrapper);
 
-        gsap.to(wrapper.children, {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          stagger: 0.04,
-          ease: 'power3.out',
-          scrollTrigger: {
-            trigger: el,
-            start: 'top 80%',
-            toggleActions: 'play none none reverse',
-          },
-        });
+        revealOnEnter(
+          Array.from(wrapper.children),
+          { y: 20, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 0.6, ease: 'power3.out' },
+          el,
+          'top 80%',
+          0.04
+        );
       });
+    }, root);
 
-    }, containerRef);
+    const refresh = () => ScrollTrigger.refresh();
+    const raf = window.requestAnimationFrame(refresh);
+    const timeout = window.setTimeout(refresh, 350);
+    window.addEventListener('load', refresh);
+    root.querySelectorAll('img').forEach((img) => {
+      img.addEventListener('load', refresh);
+      img.addEventListener('error', refresh);
+    });
+    document.fonts?.ready.then(refresh).catch(() => undefined);
 
-    return () => ctx.revert();
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+      window.removeEventListener('load', refresh);
+      root.querySelectorAll('img').forEach((img) => {
+        img.removeEventListener('load', refresh);
+        img.removeEventListener('error', refresh);
+      });
+      ctx.revert();
+    };
   }, deps);
 
   return containerRef;
